@@ -48,6 +48,7 @@ module.exports = function (grunt) {
                         name: process.env.DEBFULLNAME,
                         email: process.env.DEBEMAIL
                     },
+                    architecture : 'all',
                     name: pkg.name,
                     prefix: "",
                     postfix: "",
@@ -92,8 +93,10 @@ module.exports = function (grunt) {
             _transformAndReplace([dirs], '\\$\\{directories\\}', options.directories || [], function (directory) {
                 return directory + '\n';
             });
+
             _findAndReplace([changelog, control], '\\$\\{maintainer.name\\}', options.maintainer.name);
             _findAndReplace([changelog, control], '\\$\\{maintainer.email\\}', options.maintainer.email);
+            _findAndReplace([changelog, control], '\\$\\{architecture\\}', options.architecture);
             _findAndReplace([changelog], '\\$\\{date\\}', now);
             _findAndReplace([changelog, control, links, dirs], '\\$\\{name\\}', options.package_name);
             _findAndReplace([control], '\\$\\{short_description\\}', options.short_description);

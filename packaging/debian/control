@@ -6,7 +6,7 @@ Standards-Version: 3.9.3
 Build-Depends: debhelper (>= 9)
 
 Package: ${name}
-Architecture: all
+Architecture: ${architecture}
 Depends: ${shlibs:Depends}, ${misc:Depends}${dependencies}
 Description: ${short_description}
 ${long_description}
