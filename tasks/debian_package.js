@@ -48,6 +48,7 @@ module.exports = function (grunt) {
                         name: process.env.DEBFULLNAME,
                         email: process.env.DEBEMAIL
                     },
+                    mount_path : process.cwd(),
                     architecture : 'all',
                     name: pkg.name,
                     prefix: "",
@@ -69,7 +70,8 @@ module.exports = function (grunt) {
                 links = controlDirectory + '/links',
                 dirs = controlDirectory + '/dirs',
                 makefile = temp_directory + '/Makefile',
-                dependencies = '';
+                dependencies = '',
+                mount_path = options.mount_path;
 
             if (!_validateOptions(options, options.quiet)) {
                 return done(false);
@@ -123,51 +125,45 @@ module.exports = function (grunt) {
             // run packaging binaries (i.e. build process)
             grunt.verbose.writeln('Running \'debuild --no-tgz-check -sa -us -uc --lintian-opts --suppress-tags tar-errors-from-data,tar-errors-from-control,dir-or-file-in-var-www\'');
             if (!options.simulate) {
-                if (grunt.file.exists('/usr/bin/debuild')) {
-                    var debuild = spawn('debuild', ['--no-tgz-check', '-sa', '-us', '-uc', '--lintian-opts', '--suppress-tags', 'tar-errors-from-data,tar-errors-from-control,dir-or-file-in-var-www'], {
-                        cwd: temp_directory,
-                        stdio: [ 'ignore', (grunt.option('verbose') ? process.stdout : 'ignore'), process.stderr ]
-                    });
-                    debuild.on('exit', function (code) {
-                        if (code !== 0) {
-                            var logFile = grunt.file.read(grunt.file.expand(options.package_location + '*.build'));
-                            grunt.log.subhead('\nerror running debuild!!');
-                            if (logFile.search("Unmet\\sbuild\\sdependencies\\:\\sdebhelper")) {
-                                grunt.log.warn('debhelper dependency not found try running \'sudo apt-get install debhelper\'');
-                            }
-                            done(false);
-                        } else {
-                            _cleanUp(options);
-                            grunt.log.ok('Created package: ' + grunt.file.expand(options.package_location + '*.deb'));
-                            if (options.repository) {
-                                grunt.verbose.writeln('Running \'dput ' + options.repository + ' ' + grunt.file.expand(options.package_location + '*.changes') + '\'');
-                                require('fs').chmodSync("" + grunt.file.expand(options.package_location + '*.changes'), "744");
-                                var dputArguments = [options.repository, grunt.file.expand(options.package_location + '*.changes')];
-                                if (grunt.option('verbose')) {
-                                    dputArguments.unshift('-d');
-                                }
-                                var dput = spawn('dput', dputArguments, {
-                                    stdio: [ 'ignore', (grunt.option('verbose') ? process.stdout : 'ignore'), process.stderr ]
-                                });
-                                dput.on('exit', function (code) {
-                                    if (code !== 0) {
-                                        grunt.log.subhead('\nerror uploading package using dput!!');
-                                    } else {
-                                        grunt.log.ok('Uploaded package: ' + grunt.file.expand(options.package_location + '*.deb'));
-                                    }
-                                    done(true);
-                                });
-                            } else {
-                                done(true);
-                            }
+                var debuild = spawn('docker', ['run', '--rm', '-u', process.getuid(), '-v', mount_path + ':' + mount_path, '-w', require('path').resolve(process.cwd(), temp_directory), options.docker_image, 'debuild', '--no-tgz-check', '-sa', '-a' + options.architecture, '-us', '-uc', '-b', '--lintian-opts', '--suppress-tags', 'tar-errors-from-data,tar-errors-from-control,dir-or-file-in-var-www'], {
+                    stdio: [ 'ignore', (grunt.option('verbose') ? process.stdout : 'ignore'), process.stderr ]
+                });
+
+                debuild.on('exit', function (code) {
+                    if (code !== 0) {
+                        var logFile = grunt.file.read(grunt.file.expand(options.package_location + '*.build'));
+                        grunt.log.subhead('\nerror running debuild!!');
+                        if (logFile.search("Unmet\\sbuild\\sdependencies\\:\\sdebhelper")) {
+                            // console.log(logFile);
+                            grunt.log.warn('debhelper dependency not found try running \'sudo apt-get install debhelper\'');
                         }
-                    });
-                } else {
-                    _cleanUp(options);
-                    grunt.log.subhead('\n\'debuild\' executable not found!!');
-                    grunt.log.warn('to install debuild try running \'sudo apt-get install devscripts\'');
-                    return done(false);
-                }
+                        done(false);
+                    } else {
+                        _cleanUp(options);
+                        grunt.log.ok('Created package: ' + grunt.file.expand(options.package_location + '*.deb'));
+                        if (options.repository) {
+                            grunt.verbose.writeln('Running \'dput ' + options.repository + ' ' + grunt.file.expand(options.package_location + '*.changes') + '\'');
+                            require('fs').chmodSync("" + grunt.file.expand(options.package_location + '*.changes'), "744");
+                            var dputArguments = [options.repository, grunt.file.expand(options.package_location + '*.changes')];
+                            if (grunt.option('verbose')) {
+                                dputArguments.unshift('-d');
+                            }
+                            var dput = spawn('dput', dputArguments, {
+                                stdio: [ 'ignore', (grunt.option('verbose') ? process.stdout : 'ignore'), process.stderr ]
+                            });
+                            dput.on('exit', function (code) {
+                                if (code !== 0) {
+                                    grunt.log.subhead('\nerror uploading package using dput!!');
+                                } else {
+                                    grunt.log.ok('Uploaded package: ' + grunt.file.expand(options.package_location + '*.deb'));
+                                }
+                                done(true);
+                            });
+                        } else {
+                            done(true);
+                        }
+                    }
+                });
             } else {
                 return done(true);
             }
